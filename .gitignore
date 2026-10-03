@@ -1,0 +1,19 @@
+# n8n local data
+.n8n/
+*.sqlite
+*.sqlite-journal
+
+# credentials — never commit these
+.env
+.env.*
+credentials*.json
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# python / node scratch
+__pycache__/
+node_modules/

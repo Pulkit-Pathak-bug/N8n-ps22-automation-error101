@@ -1,0 +1,158 @@
+{
+  "name": "Shortlist — skeleton (Error 101)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Shortlist — skeleton\n\nTeam **Error 101** · Track 2: AI Automation with n8n\n\nRound 2 submission state. The chain below is the deterministic half of the system:\ningest → dedup (hash) → extract (schema) → decide (rules, with a reason).\n\nDuring the 24-hour build, node 2 is replaced by Gmail/IMAP, node 4 by the Information Extractor, and an approval step plus audit log are added after the decision.\n\n**Run it:** click Execute Workflow. Four postings go in; two are the same opening from different sources, so three items come out with a verdict and a reason each.",
+        "height": 420,
+        "width": 420,
+        "color": 4
+      },
+      "id": "db6c719d-6e36-4672-9904-22646dd7c4e2",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "72167558-01e7-4ae8-9f8d-d983dbe16f4b",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sample postings, standing in for the Gmail/IMAP ingestion node.\n// Two of these are the SAME opening arriving from two sources — the dedup\n// step below must collapse them into one item.\nconst postings = [\n  {\n    source: 'internshala',\n    sender: 'alerts@internshala.com',\n    subject: 'Software Engineering Intern at Acme Systems',\n    received: '2026-10-01',\n    body: 'Acme Systems is hiring Software Engineering Interns. Eligibility: B.Tech CSE/IT, 2030 batch, minimum CGPA 8.0, no active backlogs. Apply by 20 Oct 2026.'\n  },\n  {\n    source: 'unstop',\n    sender: 'noreply@unstop.com',\n    subject: 'Software Engineering Intern at Acme Systems',\n    received: '2026-10-01',\n    body: 'Acme Systems — Software Engineering Intern. CGPA 8.0 and above, CSE and IT branches, batch of 2030. Deadline 20 October 2026.'\n  },\n  {\n    source: 'placement-cell',\n    sender: 'tpo@college.edu',\n    subject: 'Campus drive — Borealis Analytics',\n    received: '2026-10-02',\n    body: 'Borealis Analytics campus drive. Open to all engineering branches, 2030 batch, minimum CGPA 7.0, up to 1 active backlog permitted. Register by 18 Oct 2026.'\n  },\n  {\n    source: 'linkedin',\n    sender: 'jobs-noreply@linkedin.com',\n    subject: 'Data Intern at Castellan Labs',\n    received: '2026-10-02',\n    body: 'Castellan Labs is hiring Data Interns in Bengaluru. Apply by 25 Oct 2026.'\n  }\n];\n\nreturn postings.map(p => ({ json: p }));\n"
+      },
+      "id": "e5133e50-eb2c-4e57-ae00-c945c7cd3ecc",
+      "name": "Sample postings (stands in for Gmail/IMAP)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deterministic deduplication.\n//\n// Why code and not the model: \"have I seen this before?\" is an exact-match\n// question. Hashing is reproducible, costs nothing, and can be explained to a\n// judge in one sentence. An LLM asked the same question gives a different\n// answer on a different day.\n//\n// The key is subject + received date, NOT the sender: the same opening arrives\n// from different senders (Internshala, Unstop), and those must collapse into one.\n//\n// The hash is cyrb53, a small pure-JavaScript hash, instead of require('crypto').\n// n8n blocks Node's built-in modules in Code nodes unless the server is started\n// with NODE_FUNCTION_ALLOW_BUILTIN=crypto, so this keeps the workflow importable\n// on any n8n install with no extra setup. It is not for security, only identity.\nconst cyrb53 = (str, seed = 0) => {\n  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;\n  for (let i = 0; i < str.length; i++) {\n    const ch = str.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');\n};\n\n// Normalise before hashing: lowercase, strip punctuation that differs between\n// senders, collapse whitespace. Without this the same opening hashes differently.\nconst normalise = (s) => String(s || '')\n  .toLowerCase()\n  .replace(/[^a-z0-9 ]/g, '')\n  .replace(/\\\\s+/g, ' ')\n  .trim();\n\nconst seen = new Set();\nconst unique = [];\nfor (const item of $input.all()) {\n  const p = item.json;\n  const hash = cyrb53(`${normalise(p.subject)}|${normalise(p.received)}`);\n  if (seen.has(hash)) continue;      // duplicate: drop it\n  seen.add(hash);\n  unique.push({ json: { ...p, dedup_hash: hash.slice(0, 12) } });\n}\nreturn unique;\n"
+      },
+      "id": "c63c9c59-ddf4-4f33-9c39-5a8cd0fe2d1b",
+      "name": "Deduplicate by hash",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Field extraction, stubbed with regular expressions.\n//\n// In the full build this node is replaced by the Information Extractor, which\n// returns the same schema from unstructured text. The schema is fixed here so\n// that everything downstream can be written and tested before the AI exists —\n// and so that a failure in the model layer cannot change the shape of the data.\n//\n// Rule that matters: a field not stated in the source must be null, never a\n// guess. Downstream code treats null as \"unknown\", not as \"no requirement\".\nreturn $input.all().map(item => {\n  const text = item.json.body || '';\n\n  const num = (re) => {\n    const m = text.match(re);\n    return m ? Number(m[1]) : null;\n  };\n\n  const branches = /all engineering branches|all branches/i.test(text)\n    ? ['ALL']\n    : (text.match(/\\b(CSE|IT|ECE|EEE|MECH|CIVIL)\\b/gi) || []).map(b => b.toUpperCase());\n\n  return {\n    json: {\n      ...item.json,\n      extracted: {\n        company:          (text.match(/^([A-Z][\\w& ]+?)(?: is hiring| campus drive| —)/) || [])[1] || null,\n        cgpa_min:         num(/(?:CGPA|cgpa)\\s*(?:of\\s*)?([0-9]\\.[0-9])/),\n        batch_year:       num(/batch(?: of)?\\s*(20\\d\\d)/i) || num(/(20\\d\\d)\\s*batch/i),\n        backlogs_allowed: /no active backlog/i.test(text) ? 0 : num(/up to (\\d+) active backlog/i),\n        branches:         branches.length ? branches : null,\n        deadline_text:    (text.match(/(?:Apply by|Deadline|Register by)\\s*([^.]+)/i) || [])[1] || null\n      }\n    }\n  };\n});\n"
+      },
+      "id": "16b51315-6b9a-431d-8d34-31cd76e5d7c3",
+      "name": "Extract fields (stub for Information Extractor)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// The eligibility decision — the heart of the project.\n//\n// Three outcomes, never two: eligible, not_eligible, or ambiguous. \"Ambiguous\"\n// exists because a missing criterion is not the same as a satisfied one; those\n// items go to a human instead of being silently passed or failed.\n//\n// Every outcome carries a reason string. The reason is what gets written to the\n// decision log and shown in the digest, and it is why this system can be audited\n// while a prompt-based judgement cannot.\n\nconst profile = {            // in the full build this is read from Google Sheets\n  name: 'Pulkit',\n  cgpa: 7.6,\n  branch: 'CSE',\n  batch_year: 2030,\n  active_backlogs: 0\n};\n\nreturn $input.all().map(item => {\n  const e = item.json.extracted || {};\n  const reasons = [];\n  const unknowns = [];\n\n  // CGPA\n  if (e.cgpa_min === null)            unknowns.push('CGPA cutoff not stated');\n  else if (profile.cgpa < e.cgpa_min) reasons.push(`needs ${e.cgpa_min.toFixed(1)} CGPA, profile has ${profile.cgpa}`);\n\n  // Branch — 'ALL' is an explicit wildcard, absence is not\n  if (!e.branches)                                                   unknowns.push('branches not stated');\n  else if (!e.branches.includes('ALL') && !e.branches.includes(profile.branch))\n                                                                      reasons.push(`open to ${e.branches.join('/')}, profile is ${profile.branch}`);\n\n  // Batch year\n  if (e.batch_year === null)                    unknowns.push('batch year not stated');\n  else if (e.batch_year !== profile.batch_year) reasons.push(`for the ${e.batch_year} batch, profile is ${profile.batch_year}`);\n\n  // Backlogs\n  if (e.backlogs_allowed === null)                              unknowns.push('backlog rule not stated');\n  else if (profile.active_backlogs > e.backlogs_allowed)        reasons.push(`allows ${e.backlogs_allowed} backlogs, profile has ${profile.active_backlogs}`);\n\n  let verdict, reason;\n  if (reasons.length) {\n    verdict = 'not_eligible';\n    reason  = reasons.join('; ');\n  } else if (unknowns.length) {\n    verdict = 'ambiguous';\n    reason  = `human check needed: ${unknowns.join('; ')}`;\n  } else {\n    verdict = 'eligible';\n    reason  = 'meets every stated criterion';\n  }\n\n  return {\n    json: {\n      company:  e.company,\n      source:   item.json.source,\n      hash:     item.json.dedup_hash,\n      verdict,\n      reason,\n      deadline: e.deadline_text,\n      decided_at: new Date().toISOString()\n    }\n  };\n});\n"
+      },
+      "id": "7a9bb9ef-03eb-4fc3-a06b-dc3a548f4f0b",
+      "name": "Decide eligibility",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "541c6ace-f637-4f3a-8887-2d2dcf939b28",
+      "name": "Approval + audit log (built during the event)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Sample postings (stands in for Gmail/IMAP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample postings (stands in for Gmail/IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate by hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate by hash": {
+      "main": [
+        [
+          {
+            "node": "Extract fields (stub for Information Extractor)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract fields (stub for Information Extractor)": {
+      "main": [
+        [
+          {
+            "node": "Decide eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide eligibility": {
+      "main": [
+        [
+          {
+            "node": "Approval + audit log (built during the event)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}
