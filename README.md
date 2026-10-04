@@ -91,8 +91,8 @@ Built during the 24-hour event on 17–18 October; this repository is the Round 
 
 ## Team
 
-**Error 101** — Pulkit Pathak (Computer Science & Engineering, Manipal Institute of Technology
-Bengaluru). Add remaining members here before submitting.
+**Error 101** — Pulkit Pathak, M.D. Adityapranav, Shreyas Sonaje, Dilraj P.D. || Computer Science & Engineering, Manipal Institute of Technology
+Bengaluru. 
 
 ## Licence
 
